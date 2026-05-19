@@ -9,30 +9,49 @@
 </head>
 <body>
 
-    <div class="container" style="padding: 20px; font-family: sans-serif;">
-        <h1>🧘‍♂️ PoseAlert: Hệ thống cảnh báo tư thế ngồi học</h1>
+    <div class="container" style="padding: 20px; font-family: sans-serif; max-width: 1200px; margin: 0 auto;">
+        <h1 style="color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">🧘‍♂️ PoseAlert: Hệ thống cảnh báo tư thế ngồi học</h1>
         
-        <div class="main-layout" style="display: flex; gap: 20px;">
-            <div class="left-panel">
-                <div class="video-box" style="border: 2px dashed #ccc; width: 400px; height: 400px; display: flex; align-items: center; justify-content: center; position: relative;">
+        <div class="main-layout" style="display: flex; gap: 30px; margin-top: 20px; flex-wrap: wrap;">
+            
+            <div class="left-panel" style="flex: 1; min-width: 400px;">
+                <div class="video-box" style="border: 2px dashed #cbd5e1; width: 400px; height: 400px; display: flex; align-items: center; justify-content: center; position: relative; background-color: #f8fafc; border-radius: 8px; overflow: hidden;">
                     <canvas id="canvas"></canvas>
-                    <div id="loading-model" style="position: absolute;">🔄 Đang tải mô hình AI & Camera...</div>
+                    <div id="loading-model" style="position: absolute; font-weight: bold; color: #64748b;">🔄 Đang tải mô hình AI & Camera...</div>
                 </div>
                 
-                <div id="status-card" style="margin-top: 10px; padding: 10px; background: #e2e8f0; border-radius: 5px;">
+                <div id="status-card" style="margin-top: 15px; padding: 15px; background: #e2e8f0; border-radius: 6px; font-size: 18px; font-weight: bold; color: #334155;">
                     <span id="status-text">Đang khởi tạo hệ thống...</span>
                 </div>
                 
-                <div id="alert-box" style="margin-top: 10px; padding: 15px; background: #fee2e2; color: #dc2626; border-left: 5px solid #dc2626; font-weight: bold;" class="hidden"></div>
+                <div id="alert-box" style="margin-top: 15px; padding: 15px; background: #fee2e2; color: #dc2626; border-left: 5px solid #dc2626; border-radius: 4px; font-weight: bold; font-size: 16px; display: none;"></div>
 
                 <div style="margin-top: 15px;">
-                    <button id="btn-camera" onclick="toggleCamera()" style="padding: 10px 20px; font-size: 16px; font-weight: bold; cursor: pointer; background-color: #dc2626; color: white; border: none; border-radius: 5px; transition: background 0.3s;">
+                    <button id="btn-camera" onclick="toggleCamera()" style="padding: 12px 24px; font-size: 16px; font-weight: bold; cursor: pointer; background-color: #dc2626; color: white; border: none; border-radius: 6px; transition: background 0.2s;">
                         🛑 Dừng camera (Dừng học)
                     </button>
                 </div>
-                </div> <div class="right-panel">
-                <p>Mô hình AI sẽ tự động kích hoạt Webcam sau khi tải xong trọng số.</p>
             </div>
+
+            <div class="right-panel" style="flex: 1; min-width: 320px;">
+                <div class="card pomodoro-card" style="border: 1px solid #e2e8f0; padding: 30px; border-radius: 8px; background: #f8fafc; text-align: center; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);">
+                    <h3 style="margin-top: 0; color: #475569; font-size: 20px;">⏱️ Chế độ học Pomodoro</h3>
+                    
+                    <div id="pomodoro-status" style="font-weight: bold; color: #2563eb; margin-bottom: 15px; font-size: 16px;">Trạng thái: Sẵn sàng học</div>
+                    
+                    <div id="timer" style="font-size: 64px; font-weight: bold; margin: 20px 0; font-family: monospace; color: #0f172a; letter-spacing: 2px;">25:00</div>
+                    
+                    <div style="display: flex; gap: 15px; justify-content: center;">
+                        <button id="btn-timer" onclick="togglePomodoro()" style="padding: 12px 24px; font-size: 15px; font-weight: bold; cursor: pointer; background-color: #2563eb; color: white; border: none; border-radius: 6px; min-width: 140px;">
+                            ▶️ Bắt đầu học
+                        </button>
+                        <button id="btn-reset-timer" onclick="resetPomodoro()" style="padding: 12px 24px; font-size: 15px; font-weight: bold; cursor: pointer; background-color: #64748b; color: white; border: none; border-radius: 6px;">
+                            🔄 Đặt lại
+                        </button>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
