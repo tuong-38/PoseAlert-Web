@@ -1,0 +1,26 @@
+name: Deploy PoseAlert to GitHub Pages
+
+# Kích hoạt pipeline mỗi khi có hành động push code lên nhánh main
+on:
+  push:
+    branches:
+      - main
+
+# Cấp các quyền cần thiết cho GitHub Token để deploy
+permissions:
+  contents: write
+
+jobs:
+  deploy-to-pages:
+    runs-on: ubuntu-latest
+    steps:
+      # Bước 1: Lấy toàn bộ mã nguồn từ repo về server ảo của GitHub
+      - name: Checkout mã nguồn
+        uses: actions/checkout@v4
+
+      # Bước 2: Tự động deploy toàn bộ nội dung thư mục gốc lên nhánh gh-pages
+      - name: Tiến hành Deploy lên GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: . # Deploy toàn bộ thư mục gốc hiện tại
+          branch: gh-pages # Nhánh đích mà GitHub Pages sẽ dùng để chạy web
