@@ -17,14 +17,27 @@ let timeRemaining = 25 * 60;   // Mặc định 25 phút quy đổi thành giây
 let isPomodoroRunning = false; // Trạng thái đang chạy/tạm dừng của đồng hồ
 let pomodoroMode = "WORK";     // Có 2 chế độ: "WORK" (Đang học) hoặc "BREAK" (Đang nghỉ)
 
+// --- CẤU HÌNH BIẾN THỐNG KÊ & BIỂU ĐỒ (CHART.JS) ---
+let postureChart = null;
+// Bộ đếm số khung hình (frames) của từng tư thế để tính tỷ lệ phần trăm
+const postureCounts = {
+    "Tư thế ngồi chuẩn": 0,
+    "Gù lưng, cúi đầu": 0,
+    "Vẹo người": 0,
+    "Nhìn quá gần màn hình": 0
+};
+
 // =========================================================================
-// 2. KHỞI TẠO HỆ THỐNG AI & CAMERA (INIT)
+// 2. KHỞI TẠO HỆ THỐNG AI, CAMERA & BIỂU ĐỒ (INIT)
 // =========================================================================
 async function init() {
     const modelURL = URL_MODEL + "model.json";
     const metadataURL = URL_MODEL + "metadata.json";
 
     try {
+        // Khởi tạo Biểu đồ Chart.js trước
+        initChart();
+
         // Tải cấu trúc mạng và tệp nhãn phân loại từ thư mục local
         model = await tmPose.load(modelURL, metadataURL);
         maxPredictions = model.getTotalClasses();
@@ -49,11 +62,41 @@ async function init() {
         canvas.height = size;
         ctx = canvas.getContext("2d");
 
-        console.log("Hệ thống PoseAlert đã sẵn sàng hoạt động!");
+        console.log("Hệ thống PoseAlert và Biểu đồ đã sẵn sàng hoạt động!");
     } catch (error) {
         console.error("Lỗi nghiêm trọng khi khởi tạo luồng phần cứng:", error);
         document.getElementById("loading-model").innerText = "❌ Lỗi: Không thể kết nối Webcam hoặc tải mô hình!";
     }
+}
+
+// Hàm khởi tạo cấu hình biểu đồ tròn Chart.js ban đầu
+function initChart() {
+    const ctxChart = document.getElementById('postureChart').getContext('2d');
+    postureChart = new Chart(ctxChart, {
+        type: 'pie', // Loại biểu đồ tròn (Bánh)
+        data: {
+            labels: Object.keys(postureCounts),
+            datasets: [{
+                data: Object.values(postureCounts),
+                backgroundColor: [
+                    '#16a34a', // Xanh lá - Ngồi chuẩn
+                    '#ea580c', // Cam - Gù lưng
+                    '#8b5cf6', // Tím - Vẹo người
+                    '#dc2626'  // Đỏ - Nhìn quá gần
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false // Ẩn nhãn chữ chú thích gốc để tiết kiệm không gian
+                }
+            }
+        }
+    });
 }
 
 // =========================================================================
@@ -73,7 +116,6 @@ async function loop(timestamp) {
 // 4. KIỂM TRA PHÂN LOẠI TƯ THẾ & PHÁT CẢNH BÁO (PREDICT)
 // =========================================================================
 async function predict() {
-    // Trích xuất tư thế dựa trên các điểm nút xương cơ thể
     const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
     const prediction = await model.predict(posenetOutput);
 
@@ -99,24 +141,31 @@ async function predict() {
     // In nhãn tư thế hiện tại cùng độ chính xác lên màn hình
     statusText.innerText = `Trạng thái: ${currentLabel} (${(confidence * 100).toFixed(1)}%)`;
 
+    // --- TÍCH LŨY SỐ LIỆU CHO BIỂU ĐỒ (Chỉ cộng khi độ tự tin > 60%) ---
+    if (confidence > 0.60 && postureCounts[currentLabel] !== undefined) {
+        postureCounts[currentLabel]++;
+        
+        // Cứ mỗi 15 frames (~0.5 giây), cập nhật làm mới lại biểu đồ một lần để tránh lag
+        if (wrongPostureCounter % 15 === 0) {
+            postureChart.data.datasets[0].data = Object.values(postureCounts);
+            postureChart.update('none'); // Khởi chạy update chế độ tĩnh để tối ưu hiệu năng
+        }
+    }
+
     // --- LOGIC BỘ LỌC THỜI GIAN LỌC NHIỄU SAI SỐ AI ---
     if (currentLabel === "Tư thế ngồi chuẩn") {
-        // Nếu ngồi đúng: trừ dần điểm phạt, ẩn thông báo lỗi đỏ
         wrongPostureCounter = Math.max(0, wrongPostureCounter - 1);
-        statusCard.style.backgroundColor = "#dcfce7"; // Đổi sang nền xanh mượt
-        statusCard.style.color = "#15803d";
+        statusCard.className = "status-card status-good";
         alertBox.style.display = "none";
     } else if (confidence > 0.75) {
-        // Nếu phát hiện ngồi sai tư thế bất kỳ với độ tự tin trên 75%
         wrongPostureCounter++;
-        statusCard.style.backgroundColor = "#fee2e2"; // Đổi sang nền đỏ nhạt cảnh báo
-        statusCard.style.color = "#b91c1c";
+        statusCard.className = "status-card status-bad";
 
         // Nếu thời gian ngồi sai tích lũy vượt ngưỡng an toàn (3 giây liên tục)
         if (wrongPostureCounter >= ALERT_THRESHOLD_FRAMES) {
             alertBox.style.display = "block"; // Hiển thị khung cảnh báo chữ to
             
-            // Cứ mỗi 30 frames tiếp theo (~1 giây) ngồi sai thì phát tiếng bíp nhắc nhở bằng loa laptop
+            // Cứ mỗi 30 frames tiếp theo (~1 giây) ngồi sai thì phát tiếng bíp nhắc nhở
             if (wrongPostureCounter % 30 === 0) {
                 playAlertSound(700, 0.15); 
             }
@@ -143,8 +192,8 @@ function playAlertSound(frequency = 600, duration = 0.2) {
         const gainNode = audioCtx.createGain();
 
         oscillator.type = "sine"; 
-        oscillator.frequency.value = frequency; // Tần số âm thanh (Hz)
-        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime); // Âm lượng giới hạn ở mức 10% tránh giật mình
+        oscillator.frequency.value = frequency; 
+        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime); 
 
         oscillator.connect(gainNode);
         gainNode.connect(audioCtx.destination);
@@ -165,32 +214,23 @@ function toggleCamera() {
     const canvas = document.getElementById("canvas");
 
     if (isCameraActive) {
-        // NGẮT HOÀN TOÀN LUỒNG CAMERA
         isCameraActive = false;
-        
-        if (webcam && webcam.stream) {
-            webcam.stop(); // Tắt thấu kính phần cứng (Đèn xanh cạnh webcam sẽ tắt hẳn)
-        }
-        if (animationFrameId) {
-            window.cancelAnimationFrame(animationFrameId); // Hủy lịch trình lặp của trình duyệt
-        }
-        
-        ctx.clearRect(0, 0, canvas.width, canvas.height); // Xóa vết ảnh cũ trên khung Canvas
+        if (webcam && webcam.stream) { webcam.stop(); }
+        if (animationFrameId) { window.cancelAnimationFrame(animationFrameId); }
+        ctx.clearRect(0, 0, canvas.width, canvas.height); 
         
         btn.innerText = "📷 Bắt đầu học (Bật camera)";
-        btn.style.backgroundColor = "#16a34a"; // Đổi nút sang tông xanh lá
+        btn.className = "btn btn-success";
         statusText.innerText = "Hệ thống Camera đang tạm dừng.";
         document.getElementById("alert-box").style.display = "none";
-        wrongPostureCounter = 0; // Reset điểm phạt lỗi tư thế
-        
+        wrongPostureCounter = 0; 
     } else {
-        // KÍCH HOẠT LẠI LUỒNG CAMERA
         isCameraActive = true;
         btn.innerText = "🛑 Dừng camera (Dừng học)";
-        btn.style.backgroundColor = "#dc2626"; // Đổi nút về tông đỏ mặc định
+        btn.className = "btn btn-danger";
         statusText.innerText = "Đang kết nối lại webcam...";
         
-        webcam.play(); // Mở lại luồng và tái kích hoạt hàm loop nhận diện
+        webcam.play(); 
         animationFrameId = window.requestAnimationFrame(loop);
     }
 }
@@ -200,25 +240,21 @@ function toggleCamera() {
 // =========================================================================
 function togglePomodoro() {
     const btn = document.getElementById("btn-timer");
-    const statusText = document.getElementById("pomodoro-status");
 
     if (isPomodoroRunning) {
-        // Thực hiện lệnh Tạm dừng đồng hồ
         clearInterval(pomodoroTimer);
         isPomodoroRunning = false;
         btn.innerText = "▶️ Tiếp tục học";
-        btn.style.backgroundColor = "#2563eb";
+        btn.className = "btn btn-primary";
     } else {
-        // Thực hiện lệnh Chạy tiếp đồng hồ
         isPomodoroRunning = true;
         btn.innerText = "⏸️ Tạm dừng";
-        btn.style.backgroundColor = "#eab308"; // Chuyển nút sang màu vàng nhạt
+        btn.className = "btn btn-secondary"; // Đổi style màu khi bấm chạy
         
-        pomodoroTimer = setInterval(updatePomodoroClock, 1000); // Kích hoạt bộ đếm chạy chu kỳ 1 giây
+        pomodoroTimer = setInterval(updatePomodoroClock, 1000); 
     }
 }
 
-// Trừ thời gian và hoán đổi phiên Học/Nghỉ khi bộ đếm về 0
 function updatePomodoroClock() {
     if (timeRemaining > 0) {
         timeRemaining--;
@@ -227,19 +263,16 @@ function updatePomodoroClock() {
         clearInterval(pomodoroTimer);
         isPomodoroRunning = false;
         
-        // Hết giờ: Phát chuông kép bằng âm tầng để báo hiệu cho sinh viên
         playAlertSound(440, 0.4);
         setTimeout(() => playAlertSound(880, 0.4), 500);
 
         if (pomodoroMode === "WORK") {
-            // Chuyển từ trạng thái Học sang trạng thái Nghỉ giải lao 5 phút
             pomodoroMode = "BREAK";
             timeRemaining = 5 * 60; 
             document.getElementById("pomodoro-status").innerText = "🎉 Hết giờ học! Hãy nghỉ ngơi thư giãn 5 phút.";
             document.getElementById("pomodoro-status").style.color = "#16a34a";
             alert("Đã hoàn thành 25 phút tập trung cao độ! Hãy đứng dậy đi lại giải lao trong 5 phút nhé.");
         } else {
-            // Chuyển từ trạng thái Nghỉ quay trở lại phiên Học 25 phút tập trung tiếp theo
             pomodoroMode = "WORK";
             timeRemaining = 25 * 60; 
             document.getElementById("pomodoro-status").innerText = "💻 Đến giờ tập trung học rồi!";
@@ -249,20 +282,17 @@ function updatePomodoroClock() {
 
         const btn = document.getElementById("btn-timer");
         btn.innerText = "▶️ Bắt đầu phiên mới";
-        btn.style.backgroundColor = "#2563eb";
+        btn.className = "btn btn-primary";
         displayTime();
     }
 }
 
-// Quy đổi tổng số giây còn lại ra định dạng trực quan hiển thị lên màn hình (MM:SS)
 function displayTime() {
     const minutes = Math.floor(timeRemaining / 60);
     const seconds = timeRemaining % 60;
-    const formattedTime = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    document.getElementById("timer").innerText = formattedTime;
+    document.getElementById("timer").innerText = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
-// Khôi phục đồng hồ Pomodoro về trạng thái mặc định ban đầu
 function resetPomodoro() {
     clearInterval(pomodoroTimer);
     isPomodoroRunning = false;
@@ -275,8 +305,13 @@ function resetPomodoro() {
     
     const btn = document.getElementById("btn-timer");
     btn.innerText = "▶️ Bắt đầu học";
-    btn.style.backgroundColor = "#2563eb";
+    btn.className = "btn btn-primary";
+
+    // Tiến hành reset luôn cả số liệu biểu đồ thống kê về 0 (Tùy chọn hữu ích)
+    for (let key in postureCounts) { postureCounts[key] = 0; }
+    postureChart.data.datasets[0].data = Object.values(postureCounts);
+    postureChart.update();
 }
 
-// Lắng nghe trình duyệt dựng xong cây cấu trúc phần tử (DOM) để tự động gọi hàm init khởi chạy AI
+// Tự động kích hoạt
 window.addEventListener("DOMContentLoaded", init);
