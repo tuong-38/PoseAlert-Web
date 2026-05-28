@@ -73,7 +73,7 @@ async function init() {
 function initChart() {
     const ctxChart = document.getElementById('postureChart').getContext('2d');
     postureChart = new Chart(ctxChart, {
-        type: 'pie', // Loại biểu đồ tròn (Bánh)
+        type: 'pie', // Loại biểu đồ tròn
         data: {
             labels: Object.keys(postureCounts),
             datasets: [{
@@ -155,28 +155,50 @@ async function predict() {
     // --- LOGIC BỘ LỌC THỜI GIAN LỌC NHIỄU SAI SỐ AI ---
     if (currentLabel === "Tư thế ngồi chuẩn") {
         wrongPostureCounter = Math.max(0, wrongPostureCounter - 1);
-        statusCard.className = "status-card status-good";
+        statusCard.className = "status-good"; 
         alertBox.style.display = "none";
     } else if (confidence > 0.75) {
         wrongPostureCounter++;
-        statusCard.className = "status-card status-bad";
+        statusCard.className = "status-bad"; 
 
         // Nếu thời gian ngồi sai tích lũy vượt ngưỡng an toàn (3 giây liên tục)
         if (wrongPostureCounter >= ALERT_THRESHOLD_FRAMES) {
-            alertBox.style.display = "block"; // Hiển thị khung cảnh báo chữ to
+            alertBox.style.display = "block"; // Hiển thị khung cảnh báo
             
-            // Cứ mỗi 30 frames tiếp theo (~1 giây) ngồi sai thì phát tiếng bíp nhắc nhở
-            if (wrongPostureCounter % 30 === 0) {
-                playAlertSound(700, 0.15); 
+            // Cứ mỗi 90 frames (~3 giây) ngồi sai tiếp theo thì nhắc nhở bằng giọng nói một lần
+            if (wrongPostureCounter % 90 === 0 || wrongPostureCounter === ALERT_THRESHOLD_FRAMES) {
+                let textToSpeak = "";
+                
+                if (currentLabel === "Gù lưng, cúi đầu") {
+                    textToSpeak = "Bạn đang gù lưng kìa, hãy ngồi thẳng lưng lên nhé.";
+                } else if (currentLabel === "Vẹo người") {
+                    textToSpeak = "Bạn đang ngồi vẹo người rồi, hãy cân bằng lại vai đi nào.";
+                } else if (currentLabel === "Nhìn quá gần màn hình") {
+                    textToSpeak = "Mắt bạn quá gần màn hình rồi, ngồi lùi lại để bảo vệ mắt nhé.";
+                }
+                
+                speakVietnamese(textToSpeak);
             }
 
-            // Định tuyến thông điệp thông minh dựa trên chính xác nhãn tiếng Việt của bạn
+            // --- NHẮC NHỞ KÈM ĐƯỜNG LINK
             if (currentLabel === "Gù lưng, cúi đầu") {
-                alertBox.innerText = "🚨 CẢNH BÁO: BẠN ĐANG GÙ LƯNG! HÃY NGỒI THẲNG LÊN!";
+                alertBox.innerHTML = `
+                    🚨 CẢNH BÁO: BẠN ĐANG GÙ LƯNG!<br>
+                    <a class="alert-link" href="https://www.youtube.com/shorts/kMIO9AagnUY" target="_blank">
+                        🔗 Xem video: Tác hại của việc gù lưng, cúi người đến sự phát triển cơ thể!
+                    </a>`;
             } else if (currentLabel === "Vẹo người") {
-                alertBox.innerText = "🚨 CẢNH BÁO: BẠN ĐANG NGỒI VẸO NGƯỜI! HÃY CÂN BẰNG LẠI VAI!";
+                alertBox.innerHTML = `
+                    🚨 CẢNH BÁO: BẠN ĐANG NGỒI VẸO NGƯỜI!<br>
+                    <a class="alert-link" href="https://www.youtube.com/shorts/kMIO9AagnUY" target="_blank">
+                        🔗 Xem video: Tác hại khi ngồi xiêu vẹo, làm biến dạng cột sống!
+                    </a>`;
             } else if (currentLabel === "Nhìn quá gần màn hình") {
-                alertBox.innerText = "🚨 CẢNH BÁO: MẮT QUÁ GẦN MÀN HÌNH! HÃY NGỒI LÙI LẠI ĐỂ BẢO VỆ MẮT!";
+                alertBox.innerHTML = `
+                    🚨 CẢNH BÁO: MẮT QUÁ GẦN MÀN HÌNH!<br>
+                    <a class="alert-link" href="https://matviet.vn/blogs/cach-cham-soc-mat/ngoi-qua-gan-man-hinh-co-gay-hai-cho-mat-khong?srsltid=AfmBOorwMb6VFl5YLhZBRA3sQ28YQ417H0yp_vdmIMlSKAZutnqPE6RY" target="_blank">
+                        🔗 Tìm hiểu: Ngồi quá gần màn hình máy tính gây hại cho mắt như thế nào?
+                    </a>`;
             }
         }
     }
@@ -202,6 +224,22 @@ function playAlertSound(frequency = 600, duration = 0.2) {
         oscillator.stop(audioCtx.currentTime + duration);
     } catch (e) {
         console.warn("Trình duyệt chặn quyền tự động phát âm thanh:", e);
+    }
+}
+
+// =========================================================================
+// 5.5 PHÁT GIỌNG NÓI TIẾNG VIỆT (SPEECH SYNTHESIS)
+// =========================================================================
+function speakVietnamese(text) {
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); // Hủy câu nói cũ nếu có
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'vi-VN'; 
+        utterance.rate = 1.0;     
+        utterance.pitch = 1.0;    
+        window.speechSynthesis.speak(utterance);
+    } else {
+        console.warn("Trình duyệt không hỗ trợ phát giọng nói.");
     }
 }
 
@@ -249,7 +287,7 @@ function togglePomodoro() {
     } else {
         isPomodoroRunning = true;
         btn.innerText = "⏸️ Tạm dừng";
-        btn.className = "btn btn-secondary"; // Đổi style màu khi bấm chạy
+        btn.className = "btn btn-secondary"; 
         
         pomodoroTimer = setInterval(updatePomodoroClock, 1000); 
     }
@@ -307,11 +345,10 @@ function resetPomodoro() {
     btn.innerText = "▶️ Bắt đầu học";
     btn.className = "btn btn-primary";
 
-    // Tiến hành reset luôn cả số liệu biểu đồ thống kê về 0 (Tùy chọn hữu ích)
     for (let key in postureCounts) { postureCounts[key] = 0; }
     postureChart.data.datasets[0].data = Object.values(postureCounts);
     postureChart.update();
 }
 
-// Tự động kích hoạt
+// Tự động kích hoạt khi tải trang
 window.addEventListener("DOMContentLoaded", init);
